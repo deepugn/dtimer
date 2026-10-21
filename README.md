@@ -91,22 +91,82 @@ If you'd like to test with pre-populated tasks, stopwatches, and 7-day historica
 
 ---
 
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client["Client Layer (Browser / PWA)"]
+        UI["UI Components (React 18, Tailwind CSS, Lucide Icons)"]
+        TimerEngine["Wall-Clock Delta Engine (requestAnimationFrame)"]
+        AuthContext["Auth Context (JWT Cookie State)"]
+        Charts["Analytics & Dashboards (Recharts)"]
+    end
+
+    subgraph NextServer["Next.js Full-Stack Application Server"]
+        Router["App Router & Route Handlers"]
+        
+        subgraph APILayer["REST API Layer"]
+            AuthAPI["/api/auth (Register, Login, Me, Logout)"]
+            TimerAPI["/api/stopwatches (CRUD, Laps, Batch Controls)"]
+            TaskAPI["/api/tasks (CRUD, Auto-Log on Complete)"]
+            HistoryAPI["/api/sessions (Unlimited Ledger, CSV/JSON Export)"]
+            AnalyticsAPI["/api/analytics (KPIs, Tag Donut, Heatmaps)"]
+            AdminAPI["/api/admin (User Registry, Roles/Tiers, Activity Stream)"]
+        end
+
+        AuthGuard["Auth & RBAC Middleware (Bcrypt, JWT Verification)"]
+        PrismaClient["Prisma ORM Client Singleton"]
+    end
+
+    subgraph DataLayer["Persistence Layer"]
+        subgraph DevEnv["Local Development"]
+            SQLite[("SQLite dev.db")]
+        end
+        subgraph ProdEnv["Production SaaS"]
+            Postgres[("PostgreSQL (Neon / Supabase / AWS Lightsail)")]
+            Indexes["Composite Indexes:
+            - (userId, startTime)
+            - (userId, taskId)
+            - (userId, status)"]
+        end
+    end
+
+    UI --> TimerEngine
+    UI --> AuthContext
+    UI --> Charts
+
+    TimerEngine -->|"REST / JSON"| Router
+    AuthContext -->|"HTTP-Only Cookie"| Router
+    Charts -->|"Aggregated Queries"| Router
+
+    Router --> AuthGuard
+    AuthGuard --> APILayer
+    APILayer --> PrismaClient
+
+    PrismaClient -.-> DevEnv
+    PrismaClient === ProdEnv
+```
+
+---
+
 ## 📁 Project Architecture
 
 ```
-gemini_stopwatch/
+dtimer/
 ├── prisma/
 │   ├── schema.prisma         # Data models: User, Tag, Task, Stopwatch, Lap, TimeSession
 │   └── seed.js               # Database seeder with sample tasks, tags, and history
 ├── src/
 │   ├── app/
 │   │   ├── api/              # Full REST API
+│   │   │   ├── admin/        # Admin stats, user management, activity stream
 │   │   │   ├── auth/         # Login, Register, Logout, Me
 │   │   │   ├── stopwatches/  # CRUD, Laps, Batch actions, Log session
 │   │   │   ├── tasks/        # CRUD, Complete task workflow
 │   │   │   ├── tags/         # CRUD categories
 │   │   │   ├── sessions/     # Unlimited history query, manual entry, CSV/JSON export
 │   │   │   └── analytics/    # Aggregated KPIs, tag donut, daily trends, heatmap, variance
+│   │   ├── admin/            # SaaS Admin Console Page
 │   │   ├── login/            # SaaS Login Page
 │   │   ├── register/         # SaaS Registration Page
 │   │   ├── layout.tsx        # Root Layout & Theme
@@ -125,5 +185,7 @@ gemini_stopwatch/
 │       ├── auth.ts           # JWT signing/verification, password hashing
 │       ├── prisma.ts         # Prisma client singleton
 │       └── time-utils.ts     # Wall-clock delta math & formatting
+├── Dockerfile                # Production multi-stage Docker container
+├── docker-compose.yml        # Full-stack Docker deployment with PostgreSQL
 └── package.json
 ```
